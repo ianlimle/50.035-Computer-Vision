@@ -12,39 +12,23 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import concatenate
 
-# Sequential API
-def shallownet_sequential(width, height, depth, classes):
-	# initialize the model along with the input shape to be "channels last" ordering
-	model = Sequential()
-	inputShape = (height, width, depth)
-	# define the first (and only) CONV => RELU layer
-	model.add(Conv2D(32, (3, 3), padding="same", input_shape=inputShape))
-	model.add(Activation("relu"))
-	# softmax classifier
-	model.add(Flatten())
-	model.add(Dense(classes))
-	model.add(Activation("softmax"))
-	return model
-
-##############################################
-
 # Functional API
-def minigooglenet_functional(width, height, depth, classes):
+def miniGoogleNet(width, height, depth, classes):
 	def conv_module(x, K, kX, kY, stride, chanDim, padding="same"):
 		# define a CONV => BN => RELU pattern
 		x = Conv2D(K, (kX, kY), strides=stride, padding=padding)(x)
 		x = BatchNormalization(axis=chanDim)(x)
 		x = Activation("relu")(x)
 		return x
-
-    def inception_module(x, numK1x1, numK3x3, chanDim):
+		
+	def inception_module(x, numK1x1, numK3x3, chanDim):
 		# define two CONV modules, then concatenate across the channel dimension
 		conv_1x1 = conv_module(x, numK1x1, 1, 1, (1, 1), chanDim)
 		conv_3x3 = conv_module(x, numK3x3, 3, 3, (1, 1), chanDim)
 		x = concatenate([conv_1x1, conv_3x3], axis=chanDim)
 		return x
-
-    def downsample_module(x, K, chanDim):
+		
+	def downsample_module(x, K, chanDim):
 		# define the CONV module and POOL, then concatenate across the channel dimensions
 		conv_3x3 = conv_module(x, K, 3, 3, (2, 2), chanDim, padding="valid")
 		pool = MaxPooling2D((3, 3), strides=(2, 2))(x)
@@ -88,10 +72,10 @@ def minigooglenet_functional(width, height, depth, classes):
 
 #######################################################
 
-class MiniVGGNetModel(Model):
+class miniVGGNet(Model):
 	def __init__(self, classes, chanDim=-1):
 		# call the parent constructor
-		super(MiniVGGNetModel, self).__init__()
+		super(miniVGGNet, self).__init__()
 
 		# initialize the layers in the first (CONV => RELU) * 2 => POOL layer set
 		self.conv1A = Conv2D(32, (3, 3), padding="same")
@@ -121,5 +105,36 @@ class MiniVGGNetModel(Model):
 		# initialize the layers in the softmax classifier layer set
 		self.dense4 = Dense(classes)
 		self.softmax = Activation("softmax")
+		
+	def call(self, inputs):
+		# build the first (CONV => RELU) * 2 => POOL layer set
+		x = self.conv1A(inputs)
+		x = self.act1A(x)
+		x = self.bn1A(x)
+		x = self.conv1B(x)
+		x = self.act1B(x)
+		x = self.bn1B(x)
+		x = self.pool1(x)
+
+		# build the second (CONV => RELU) * 2 => POOL layer set
+		x = self.conv2A(x)
+		x = self.act2A(x)
+		x = self.bn2A(x)
+		x = self.conv2B(x)
+		x = self.act2B(x)
+		x = self.bn2B(x)
+		x = self.pool2(x)
+		
+        # build our FC layer set
+		x = self.flatten(x)
+		x = self.dense3(x)
+		x = self.act3(x)
+		x = self.bn3(x)
+		x = self.do3(x)
+		
+        # build the softmax classifier
+		x = self.dense4(x)
+		x = self.softmax(x)
+		return x
 
 
