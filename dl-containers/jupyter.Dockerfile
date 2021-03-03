@@ -16,7 +16,7 @@ RUN pip3 install \
     # Jupyter itself
     jupyter \
     # Numpy and Pandas are required a-priori
-    numpy pandas \
+    numpy pandas scikit-learn \
     # PyTorch with CUDA 10.2 support and Torchvision
     torch torchvision \
     # Upgraded version of Tensorboard with more features
