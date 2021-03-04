@@ -26,7 +26,13 @@ def affine_forward(x, w, b):
     # will need to reshape the input into rows.                               #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    N = x.shape[0]
+    
+    # reshape activations to [N x (d1, ... , d_k)] which is a 2d matrix of shape (N, D)
+    x_ = x.reshape(N, -1)
+    
+    # get output of forward pass
+    out = np.dot(x_, w) + b.T
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -60,7 +66,19 @@ def affine_backward(dout, cache):
     # TODO: Implement the affine backward pass.                               #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    N = x.shape[0]
+    
+    # get dx (same format as x)
+    dx = np.dot(dout, w.T)
+    dx = dx.reshape(x.shape)
+    
+    # get dw (same format as w)
+    # reshape activations to [N x (d1, ... , d_k)] which is a 2d matrix of shape (N, D)
+    x_ = x.reshape(N, -1)
+    dw = x_.T.dot(dout)
+    
+    # get db (same format as b)
+    db = np.sum(dout, axis=0)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -87,7 +105,8 @@ def relu_forward(x):
     # TODO: Implement the ReLU forward pass.                                  #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    relu = lambda x: x * (x > 0.0)
+    out = relu(x)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -115,7 +134,7 @@ def relu_backward(dout, cache):
     # TODO: Implement the ReLU backward pass.                                 #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+    dx = dout * (x > 0.0)
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -168,7 +187,11 @@ def dropout_forward(x, dropout_param):
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # create a mask and scale by p to avoid having multiply by p on backpropagation
+        mask = (np.random.rand(*x.shape) < p) / p
+        # apply mask
+        out = x * mask
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -180,7 +203,10 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement the test phase forward pass for inverted dropout.   #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        mask = None
+        # return just the input
+        out = x
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -212,7 +238,9 @@ def dropout_backward(dout, cache):
         # TODO: Implement training phase backward pass for inverted dropout   #
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # backprop dout from neurons used during dropout_forward 
+        dx = dout * mask
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -258,7 +286,27 @@ def conv_forward_naive(x, w, b, conv_param):
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    F, HH, WW = w.shape[0], w.shape[2], w.shape[3]    
 
+    padding = conv_param['pad']
+    stride = conv_param['stride']    
+
+    H_new = 1 + (H + 2 * padding - HH) // stride
+    W_new = 1 + (W + 2 * padding - WW) // stride   
+    
+    # create a new padded x to convolve over 
+    padded_x = np.pad(x, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant')
+    # create an output array of shape (N, F, H_new, W_new)
+    out = np.zeros((N, F, H_new, W_new))
+
+    for i in range(F):
+        for j in range(H_new):
+            for k in range(W_new):
+                window = padded_x[:, :, j*stride:j*stride+HH, k*stride:k*stride+WW]
+                # obtain output by convolving filter kernel over the window
+                out[:, i, j, k] = np.sum(window * w[i,:,:,:], axis=(1,2,3)) + b[i]
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -287,7 +335,34 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    x, w, b, conv_param = cache
 
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    F, HH, WW = w.shape[0], w.shape[2], w.shape[3]
+    
+    stride = conv_param['stride']
+    padding = conv_param['pad']    
+
+    H_new, W_new = dout.shape[2], dout.shape[3]     
+
+    padded_x = np.pad(x, ((0,0),(0,0),(padding,padding),(padding,padding)), mode='constant')
+    dx = np.zeros_like(padded_x)
+
+    for i in range(F):
+        for j in range(H_new):
+            for k in range(W_new):
+                dx[:, :, j*stride:j*stride+HH, k*stride:k*stride+WW] += dout[:, i, j, k][:,np.newaxis,np.newaxis,np.newaxis] * w[i,:,:,:]
+
+    dx = dx[:,:,padding:-padding,padding:-padding]
+    dw = np.zeros_like(w)
+
+    for i in range(F):
+        for j in range(H_new):
+            for k in range(W_new):
+                dw[i,:,:,:] += np.sum(dout[:, i, j, k][:,np.newaxis,np.newaxis,np.newaxis] * padded_x[:,:,j*stride:j*stride+HH,k*stride:k*stride+WW], axis=0)
+
+    db = np.sum(dout, axis=(0,2,3))
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -321,7 +396,20 @@ def max_pool_forward_naive(x, pool_param):
     # TODO: Implement the max-pooling forward pass                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    
+    pH = pool_param['pool_height']
+    pW = pool_param['pool_width']
+    pS = pool_param['stride']
+    
+    H_new = 1 + (H - pH) // pS
+    W_new = 1 + (W - pW) // pS
+    out = np.zeros((N, C, H_new, W_new))
 
+    for j in range(H_new):
+        for k in range(W_new):
+            out[:, :, j, k] = np.max(x[:, :, j*pS:j*pS+pH, k*pS:k*pS+pW], axis=(2,3))
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -348,7 +436,26 @@ def max_pool_backward_naive(dout, cache):
     # TODO: Implement the max-pooling backward pass                           #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    
+    x = cache[0]
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    
+    pool_param = cache[1]
+    pW = pool_param['pool_width']
+    pH = pool_param['pool_height']
+    pS = pool_param['stride']
 
+    H_new = 1 + (H - pH) // pS
+    W_new = 1 + (W - pW) // pS
+
+    dx = np.zeros_like(x)
+
+    for num in range(N):
+        for i in range(C):
+            for j in range(H_new):
+                for k in range(W_new):
+                    get_max = np.unravel_index(np.argmax(x[num, i, j*pS:j*pS+pH, k*pS:k*pS+pW]), x[num, i, j*pS:j*pS+pH, k*pS:k*pS+pW].shape) 
+                    dx[num, i, j*pS:j*pS+pH, k*pS:k*pS+pW][get_max[0],get_max[1]] += dout[num, i, j, k]
     pass
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

@@ -48,7 +48,14 @@ class TwoLayerNet(object):
         # weights and biases using the keys 'W2' and 'b2'.                         #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # initialize the weights & biases for the first FC layer
+        self.params['W1'] = np.random.normal(scale=weight_scale, size=(input_dim, hidden_dim))
+        self.params['b1'] = np.zeros(hidden_dim)
+        
+        # for the second FC layer 
+        self.params['W2'] = np.random.normal(scale=weight_scale, size=(hidden_dim, num_classes))
+        self.params['b2'] = np.zeros(num_classes)
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -82,7 +89,10 @@ class TwoLayerNet(object):
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        forward_1, cache_1 = affine_forward(X, self.params['W1'], self.params['b1'])
+        forward_2, cache_2 = relu_forward(forward_1)
+        scores, cache_3 = affine_forward(forward_2, self.params['W2'], self.params['b2'])
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -106,7 +116,22 @@ class TwoLayerNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # compute loss and gradient for the softmax classification 
+        soft_loss, soft_grad = softmax_loss(scores, y)
+        
+        # compute overall loss (with L2 regularization , including a factor of 0.5)
+        reg_loss = 0.5 * self.reg * (np.sum(np.square(self.params['W1'])) + np.sum(np.square(self.params['W2'])))
+        loss = soft_loss + reg_loss
+        
+        # compute the outputs from the various backprops
+        back_1, grads['W2'], grads['b2'] = affine_backward(soft_grad, cache_3)
+        back_2 = relu_backward(back_1, cache_2)
+        _, grads['W1'], grads['b1'] = affine_backward(back_2, cache_1)
+        
+        # apply regularization on gradients
+        grads['W2'] += self.reg * self.params['W2']
+        grads['W1'] += self.reg * self.params['W1']
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -170,7 +195,20 @@ class FullyConnectedNet(object):
         #                                                                          #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        # initialize the weights & biases for the first FC layer
+        self.params['W1'] = np.random.normal(scale=weight_scale, size=(input_dim, hidden_dims[0]))
+        self.params['b1'] = np.zeros(hidden_dims[0])
+        
+        # if there are >= 2 hidden layers
+        if self.num_layers >= 3:
+            for i in range(2, self.num_layers):
+                self.params['W' + str(i)] = np.random.normal(scale=weight_scale, size=(hidden_dims[i-2], hidden_dims[i-1]))
+                self.params['b' + str(i)] = np.zeros(hidden_dims[i-1])        
+        
+        # for the last FC layer 
+        self.params['W' + str(self.num_layers)] = np.random.normal(scale=weight_scale, size=(hidden_dims[-1], num_classes))
+        self.params['b' + str(self.num_layers)] = np.zeros(num_classes)
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -215,7 +253,29 @@ class FullyConnectedNet(object):
         #                                                                          #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        
+        cache, outputs = {}, {}
+        outputs['out1'], cache['out1'] = affine_forward(X, self.params['W1'], self.params['b1'])
+        outputs['relu_1'], cache['relu_1'] = relu_forward(outputs['out1'])
+        
+        if self.use_dropout:
+            outputs['drop_1'], cache['drop_1'] = dropout_forward(outputs['relu_1'], self.dropout_param)
+        
+        if self.num_layers >= 3:
+            for i in range(2, self.num_layers):
+                if self.use_dropout:
+                    outputs['out' + str(i)], cache['out' + str(i)] = affine_forward(outputs['drop_' + str(i-1)], self.params['W' + str(i)], self.params['b' + str(i)])
+                else:
+                    outputs['out' + str(i)], cache['out' + str(i)] = affine_forward(outputs['relu_' + str(i-1)], self.params['W' + str(i)], self.params['b' + str(i)])
+                
+                outputs['relu_' + str(i)], cache['relu_' + str(i)] = relu_forward(outputs['out' + str(i)])
+                if self.use_dropout:
+                    outputs['drop_' + str(i)], cache['drop_' + str(i)] = dropout_forward(outputs['relu_' + str(i)], self.dropout_param)        
+        
+        if self.use_dropout:
+            scores, cache['out' + str(self.num_layers)] = affine_forward(outputs['drop_' + str(self.num_layers - 1)], self.params['W' + str(self.num_layers)], self.params['b' + str(self.num_layers)])
+        else:
+            scores, cache['out' + str(self.num_layers)] = affine_forward(outputs['relu_' + str(self.num_layers - 1)], self.params['W' + str(self.num_layers)], self.params['b' + str(self.num_layers)])
         pass
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -240,6 +300,36 @@ class FullyConnectedNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        
+        # compute loss and gradient for the softmax classification
+        soft_loss, soft_grad = softmax_loss(scores, y)
+        reg_loss = 0.0
+        
+        # compute overall loss (with L2 regularization, including a factor of 0.5)
+        for i in range(self.num_layers):
+            reg_loss += np.sum(np.square(self.params['W' + str(i+1)]))
+        reg_loss = 0.5 * self.reg * reg_loss
+        loss = soft_loss + reg_loss
+        
+        # compute the outputs from the various backprops
+        k1, grads['W' + str(self.num_layers)], grads['b' + str(self.num_layers)] = affine_backward(soft_grad, cache['out' + str(self.num_layers)])
+        
+        if self.use_dropout:
+            k1 = dropout_backward(k1, cache['drop_' + str(self.num_layers - 1)])
+        k1 = relu_backward(k1, cache['relu_' + str(self.num_layers - 1)])
+        
+        if self.num_layers >= 3:
+            for i in range(self.num_layers - 1, 1, -1):
+                k1, grads['W2'], grads['b2'] = affine_backward(k1, cache['out' + str(i)])
+                if self.use_dropout:
+                    k1 = dropout_backward(k1, cache['drop_' + str(i - 1)])
+                k1 = relu_backward(k1, cache['relu_' + str(i - 1)])
+        
+        _, grads['W1'], grads['b1'] = affine_backward(k1, cache['out1'])
+        
+        # apply regularization on gradients
+        for i in range(self.num_layers):
+            grads['W' + str(i+1)] += self.reg * self.params['W' + str(str(i+1))]
 
         pass
 
