@@ -72,4 +72,3 @@ def miniGoogleNet(width, height, depth, classes):
     # create the model
 	model = Model(inputs, x, name="minigooglenet")
 	return model
-
