@@ -30,6 +30,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         libssl-dev \
         curl \
         ffmpeg \
+        p7zip-full \
         unzip \
         unrar \
         && \
