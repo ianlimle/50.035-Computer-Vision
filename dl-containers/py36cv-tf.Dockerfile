@@ -71,7 +71,6 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         imutils \
         Cython \
         tqdm \
-        glob \
         attention \
         Keras \
         Pillow \
