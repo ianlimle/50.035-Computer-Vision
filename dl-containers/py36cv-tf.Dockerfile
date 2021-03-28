@@ -71,6 +71,9 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         imutils \
         Cython \
         tqdm \
+        attention \
+        Keras \
+        Pillow \
         && \
 # ==================================================================
 # boost
