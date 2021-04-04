@@ -5,7 +5,8 @@ from builtins import range
 import urllib.request, urllib.error, urllib.parse, os, tempfile
 
 import numpy as np
-from scipy.misc import imread, imresize
+from imageio import imread
+from skimage.transform import resize as imresize
 
 """
 Utility functions used for viewing and processing images.
