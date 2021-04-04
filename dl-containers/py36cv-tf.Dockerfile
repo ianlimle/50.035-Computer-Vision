@@ -74,6 +74,7 @@ RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
         attention \
         Keras \
         Pillow \
+        future \
         && \
 # ==================================================================
 # boost
